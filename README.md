@@ -29,8 +29,8 @@ python websocket_server.py
 ```
 
 Server starts on:
-- **WebSocket**: `ws://localhost:8765`
-- **Health Checks**: `http://localhost:8766`
+- **WebSocket**: `ws://localhost:3002`
+- **Health Checks**: `http://localhost:3001`
 
 ## Connecting to WebSocket
 
@@ -83,7 +83,7 @@ asyncio.run(connect())
 ### JavaScript Example
 
 ```javascript
-const ws = new WebSocket('ws://localhost:8765');
+const ws = new WebSocket('ws://localhost:3002');
 let fullConversation = [];
 
 ws.onopen = () => {
