@@ -16,7 +16,7 @@ Create a `.env` file:
 
 ```env
 OPENAI_API_KEY=your_openai_api_key_here
-OPENAI_MODEL=gpt-3.5-turbo
+OPENAI_MODEL=gpt-4.1
 WS_HOST=localhost
 WS_PORT=8765
 HEALTH_PORT=8766
@@ -46,10 +46,11 @@ async def connect():
     async with websockets.connect(uri) as websocket:
         # Receive welcome message
         welcome = await websocket.recv()
-        
-        # Client maintains full conversation
+        print(welcome)
+
+        # Client maintains full conversation (array of {speaker, text})
         full_conversation = []
-        
+
         # Step 1: Counselor speaks
         full_conversation.append({
             "speaker": "counselor",
@@ -59,8 +60,9 @@ async def connect():
             "type": "transcript",
             "transcripts": full_conversation
         }))
-        await websocket.recv()  # Acknowledgment
-        
+        # Expect: acknowledged
+        print(await websocket.recv())
+
         # Step 2: Patient responds
         full_conversation.append({
             "speaker": "patient",
@@ -70,7 +72,7 @@ async def connect():
             "type": "transcript",
             "transcripts": full_conversation
         }))
-        # Receive analysis (last transcript is patient)
+        # Expect: analysis
         response = await websocket.recv()
         data = json.loads(response)
         print(data)
@@ -94,7 +96,7 @@ ws.onopen = () => {
     type: "transcript",
     transcripts: fullConversation
   }));
-  
+
   // Step 2: Patient responds
   fullConversation.push({
     speaker: "patient",
@@ -112,41 +114,33 @@ ws.onmessage = (event) => {
 };
 ```
 
-## Message Structure
+## WebSocket Data I/O (Simple)
 
-### Sending Messages
+### Input (Client → Server)
 
-#### Send Full Transcripts Array
+Send the full conversation array every time. The server decides based on the last item.
 
+can give 'plain text' or 'json' formate
+
+json structure
 ```json
 {
   "type": "transcript",
   "transcripts": [
-    {"speaker": "counselor", "text": "Hello, how are you feeling today?"},
-    {"speaker": "patient", "text": "I've been feeling really anxious lately."}
+    {"counselor": "Hello, how are you feeling today?"},
+    {"patient": "I've been feeling really anxious lately."}
   ]
 }
 ```
 
-**Fields:**
-- `type`: Must be `"transcript"`
-- `transcripts`: Array of transcript objects, each with:
-  - `speaker`: Must be `"patient"` or `"counselor"`
-  - `text`: The spoken text (string)
 
-**Important:** Send the **full conversation array** each time. The client maintains the conversation and sends the complete array on every update. The server checks the **last transcript** in the array:
-- If last transcript is `"patient"` → Analyze and return analysis
-- If last transcript is `"counselor"` → Return acknowledgment
-
-#### Ping
+Optional ping:
 
 ```json
-{
-  "type": "ping"
-}
+{ "type": "ping" }
 ```
 
-### Receiving Messages
+### Output (Server → Client)
 
 #### Connection Confirmation
 
@@ -162,17 +156,17 @@ ws.onmessage = (event) => {
 ```json
 {
   "type": "analysis",
-  "problems": ["Feeling anxious", "Work-related stress"],
-  "nudges": [
-    "Validate the patient's anxiety",
-    "Explore coping strategies",
-    "Ask about specific triggers"
-  ],
-  "sentiment": ["negative", "anxiety"]
+  "message" : {
+            "problems": ["problem1", "problem2" ],
+            "nudges": ["nudge1", "nudge2", "nudge3"],
+            "sentiment": ["word1", "word2"],
+            "follow_up": ""
+            "risk": ["low", "medium", "high"]
+            }
 }
 ```
 
-**Note:** Analysis includes previous nudges in context, so new suggestions build upon earlier ones.
+Note: Previous nudges are considered to build on earlier suggestions.
 
 #### Acknowledgment (Counselor Messages)
 

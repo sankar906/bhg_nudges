@@ -27,7 +27,7 @@ logger = logging.getLogger(__name__)
 class CounselorWebSocketServer:
     """WebSocket server for real-time counselor agent analysis."""
 
-    def __init__(self, api_key: str = None, model: str = "gpt-3.5-turbo"):
+    def __init__(self, api_key: str = None, model: str = "gpt-4.1"):
         self.api_key = api_key
         self.model = model
         self.active_connections = 0
@@ -54,27 +54,12 @@ class CounselorWebSocketServer:
                 try:
                     data = json.loads(message)
                     if data.get("type") == "transcript":
-                        transcripts = data.get("transcripts", [])
+                        transcripts = data.get("transcripts", "")
 
-                        # Validate and get last transcript
-                        last_transcript = transcripts[-1] if transcripts else None
-                        if not last_transcript:
-                            continue
-
-                        speaker = last_transcript.get("speaker", "").lower()
-                        text = last_transcript.get("text", "")
-
-                        if speaker not in ["patient", "counselor"] or not text:
-                            continue
-
-                        logger.debug(
-                            "Received %d transcripts, last speaker: %s",
-                            len(transcripts),
-                            speaker,
-                        )
+                        logger.debug("Received transcripts, last speaker: ")
 
                         # Patient -> analyze, Counselor -> acknowledge
-                        if speaker == "patient":
+                        if transcripts:
                             analysis = agent.analyze_conversation(
                                 transcripts, previous_nudges=previous_nudges
                             )
@@ -85,24 +70,15 @@ class CounselorWebSocketServer:
                                 websocket.remote_address,
                             )
                             await websocket.send(
-                                json.dumps(
-                                    {
-                                        "type": "analysis",
-                                        "problems": analysis.get("problems", []),
-                                        "nudges": analysis.get("nudges", []),
-                                        "sentiment": analysis.get(
-                                            "sentiment", ["neutral"]
-                                        ),
-                                    }
-                                )
+                                json.dumps({"type": "analysis", "message": analysis})
                             )
                         else:
                             # Counselor message, just acknowledge
                             await websocket.send(
                                 json.dumps(
                                     {
-                                        "type": "acknowledged",
-                                        "message": "Transcript received",
+                                        "type": "warning",
+                                        "message": "no transcript recived ",
                                     }
                                 )
                             )
@@ -203,8 +179,8 @@ class CounselorWebSocketServer:
         self, host: str = None, port: int = None, health_port: int = None
     ):
         host = host or os.getenv("WS_HOST", "localhost")
-        port = port or int(os.getenv("WS_PORT", "8765"))
-        health_port = health_port or int(os.getenv("HEALTH_PORT", "8767"))
+        port = port or int(os.getenv("WS_PORT", "3002"))
+        health_port = health_port or int(os.getenv("HEALTH_PORT", "3001"))
 
         # Start HTTP server for health checks
         app = web.Application()
@@ -231,7 +207,7 @@ async def main():
     if not api_key:
         logger.error("OPENAI_API_KEY not found in environment variables")
         return
-    model = os.getenv("OPENAI_MODEL", "gpt-3.5-turbo")
+    model = os.getenv("OPENAI_MODEL", "gpt-4.1")
     server = CounselorWebSocketServer(api_key=api_key, model=model)
     await server.start_server()
 

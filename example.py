@@ -13,29 +13,24 @@ load_dotenv()
 
 async def test_counselor_agent():
     host = os.getenv("WS_HOST", "localhost")
-    port = os.getenv("WS_PORT", "8765")
+    port = os.getenv("WS_PORT", "3002")
     uri = f"ws://{host}:{port}"
 
     transcripts = [
         {
-            "speaker": "counselor",
-            "text": "Thanks for being here today. How have you been feeling lately?",
+            "counselor": "Thanks for being here today. How have you been feeling lately?",
         },
         {
-            "speaker": "patient",
-            "text": "It's been rough. I've been trying to cut back on using, but I keep slipping. I feel like I'm losing control.",
+            "patient": "It's been rough. I've been trying to cut back on using, but I keep slipping. I feel like I'm losing control.",
         },
         {
-            "speaker": "counselor",
-            "text": "That sounds like a heavy burden to carry. Can you tell me more about what happens before you use?",
+            "counselor": "That sounds like a heavy burden to carry. Can you tell me more about what happens before you use?",
         },
         {
-            "speaker": "patient",
-            "text": "Usually when I'm stressed or alone. It's like my head won't quiet down, and using is the only thing that feels like relief.",
+            "patient": "Usually when I'm stressed or alone. It's like my head won't quiet down, and using is the only thing that feels like relief.",
         },
         {
-            "speaker": "counselor",
-            "text": "It makes sense that you'd look for something to calm that overwhelming stress. You're not alone in this, and there are ways we can work through those moments together.",
+            "counselor": "It makes sense that you'd look for something to calm that overwhelming stress. You're not alone in this, and there are ways we can work through those moments together.",
         },
     ]
 
@@ -46,31 +41,25 @@ async def test_counselor_agent():
 
             for i in range(len(transcripts)):
                 current_transcripts = transcripts[: i + 1]
-                last_transcript = current_transcripts[-1]
+                print(current_transcripts)
+                print("\n" + "=" * 60)
+                text = ""
+                for docs in current_transcripts:
+                    for k, v in docs.items():
+                        text = text + f"{k}: {v} \n"
 
-                print(f"\n--- Step {i + 1}: {last_transcript['speaker']} ---")
-                print(f"  {last_transcript['text']}")
-
-                message = {"type": "transcript", "transcripts": current_transcripts}
+                message = {"type": "transcript", "transcripts": text}
                 await websocket.send(json.dumps(message))
                 response = await websocket.recv()
                 data = json.loads(response)
 
                 if data.get("type") == "analysis":
-                    print("\n" + "=" * 60)
-                    print("ANALYSIS RESULTS:")
-                    print("=" * 60)
-                    print("\nPROBLEMS:")
-                    for problem in data.get("problems", []):
-                        print(f"  - {problem}")
-                    print("\nNUDGES:")
-                    for nudge in data.get("nudges", []):
-                        print(f"  - {nudge}")
-                    print("\nSENTIMENT:")
-                    print(f"  {', '.join(data.get('sentiment', ['neutral']))}")
-                    print("=" * 60)
+                    data = data.get("message", {})
+                    for k, v in data.items():
+                        print(f"--> {k}: {v}")
                 elif data.get("type") == "acknowledged":
-                    print(f"✓ {data.get('message', 'Received')}")
+                    pass
+                    # print(f"✓ {data.get('message', 'Received')}")
 
     except (ConnectionRefusedError, OSError):
         print("Error: Could not connect to server.")

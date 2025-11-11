@@ -22,7 +22,7 @@ class CounselorAgent:
                 "OpenAI API key is required. Set OPENAI_API_KEY environment variable."
             )
         self.client = OpenAI(api_key=self.api_key)
-        self.model = model or os.getenv("OPENAI_MODEL", "gpt-3.5-turbo")
+        self.model = model or os.getenv("OPENAI_MODEL", "gpt-4.1")
 
     def analyze_conversation(
         self, transcripts: List[Dict[str, str]], previous_nudges: List[str] = None
@@ -31,38 +31,57 @@ class CounselorAgent:
             return {"problems": [], "nudges": [], "sentiment": ["neutral"]}
         logger.info("Analyzing conversation with %d messages", len(transcripts))
 
-        conversation_text = "\n".join(
-            [f"{msg.get('speaker')}: {msg.get('text')}" for msg in transcripts]
-        )
+        conversation_text = transcripts
+        if isinstance(transcripts, list):
+            conversation_text = ""
+            for msg in transcripts:
+                for k, v in msg.items():
+                    conversation_text = conversation_text + f"{k}: {v} \n"
+        print(conversation_text)
 
         previous_nudges_text = ""
         if previous_nudges:
             previous_nudges_text = (
-                "\n\nPrevious suggestions given to counselor:\n"
+                "\nPrevious suggestions given to counselor:\n"
                 + "\n".join([f"- {nudge}" for nudge in previous_nudges])
                 + "\n\nConsider these previous suggestions when providing new nudges. Build upon them or provide new relevant suggestions based on the current conversation state."
             )
 
         prompt = f"""Analyze this patient-counselor conversation and provide:
 
+        You were given a mixed conversation (counceller and patient),
+        identify patient transcripts and counceller transcripts and provide the output as following.
+
             1. PROBLEMS: List all problems or concerns the patient is expressing. Each problem should be a short, clear statement. Return as a list.
 
-            2. NUDGES: Provide 3-5 actionable suggestions for the counselor. Each nudge should be one short sentence. Return as a list.
+            2. NUDGES: Provide 3-5 actionable suggestions for the counselor. Each nudge should be one short sentence. Return as a list. provide medication also.
 
             3. SENTIMENT: Identify the main emotional tone using simple words like: positive, negative, anxiety, neutral, sadness, anger, fear, hope, etc. Return as a list of 1-3 emotion words that best describe the conversation.
 
+            4. FOLLOW_UP: Based on the conversation suggest the counceller what to ask.
+
+            5. RISK: Give a risk value based on the patient conversation
+
             Format your response as JSON with these exact keys:
             {{
-            "problems": ["problem1", "problem2"],
-            "nudges": ["nudge1", "nudge2", "nudge3"],
-            "sentiment": ["word1", "word2"]
+            "problems": ["problem1", "problem2", etc],
+            "nudges": ["nudge1", "nudge2", "nudge3", etc],
+            "sentiment": ["word1", "word2"],
+            "follow_up": ""
+            "risk": ["low", "medium", "high"]
             }}
 
             Use simple, clear words. Keep everything short and direct.
 
+            previous nudges: {previous_nudges_text}
+
             Conversation:
-            {conversation_text}{previous_nudges_text}
+            {conversation_text}
             """
+
+        #   "risk": "Low",
+        #   "generative_nudge": "Good choice. Take two deep breaths and text someone you trust.",
+        #   "follow_up": "Who could you text right now?"
 
         try:
             response = self.client.chat.completions.create(
@@ -95,6 +114,10 @@ class CounselorAgent:
                 result["sentiment"] = [
                     word.lower().strip() for word in result["sentiment"]
                 ]
+            if "follow_up" not in result:
+                result["follow_up"] = ""
+            if "risk" not in result:
+                result["risk"] = []
 
             return result
         except json.JSONDecodeError:
@@ -117,6 +140,11 @@ class CounselorAgent:
                         result["sentiment"], list
                     ):
                         result["sentiment"] = ["neutral"]
+                    if "follow_up" not in result:
+                        result["follow_up"] = ""
+                    if "risk" not in result:
+                        result["risk"] = []
+
                     return result
             except (json.JSONDecodeError, ValueError, AttributeError):
                 logger.error("Failed to extract JSON from response", exc_info=True)
@@ -125,6 +153,8 @@ class CounselorAgent:
                 "problems": ["Unable to analyze"],
                 "nudges": ["Review conversation manually"],
                 "sentiment": ["neutral"],
+                "follow_up": "",
+                "risk": [],
             }
         except Exception as e:
             logger.error(
@@ -134,4 +164,6 @@ class CounselorAgent:
                 "problems": ["Error occurred"],
                 "nudges": [],
                 "sentiment": ["neutral"],
+                "follow_up": "",
+                "risk": [],
             }
