@@ -42,7 +42,7 @@ import json
 import websockets
 
 async def connect():
-    uri = "ws://localhost:8765"
+    uri = "ws://localhost:3002"
     async with websockets.connect(uri) as websocket:
         # Receive welcome message
         welcome = await websocket.recv()
