@@ -46,10 +46,11 @@ async def connect():
     async with websockets.connect(uri) as websocket:
         # Receive welcome message
         welcome = await websocket.recv()
-        
-        # Client maintains full conversation
+        print(welcome)
+
+        # Client maintains full conversation (array of {speaker, text})
         full_conversation = []
-        
+
         # Step 1: Counselor speaks
         full_conversation.append({
             "speaker": "counselor",
@@ -59,8 +60,9 @@ async def connect():
             "type": "transcript",
             "transcripts": full_conversation
         }))
-        await websocket.recv()  # Acknowledgment
-        
+        # Expect: acknowledged
+        print(await websocket.recv())
+
         # Step 2: Patient responds
         full_conversation.append({
             "speaker": "patient",
@@ -70,7 +72,7 @@ async def connect():
             "type": "transcript",
             "transcripts": full_conversation
         }))
-        # Receive analysis (last transcript is patient)
+        # Expect: analysis
         response = await websocket.recv()
         data = json.loads(response)
         print(data)
@@ -94,7 +96,7 @@ ws.onopen = () => {
     type: "transcript",
     transcripts: fullConversation
   }));
-  
+
   // Step 2: Patient responds
   fullConversation.push({
     speaker: "patient",
@@ -112,11 +114,11 @@ ws.onmessage = (event) => {
 };
 ```
 
-## Message Structure
+## WebSocket Data I/O (Simple)
 
-### Sending Messages
+### Input (Client → Server)
 
-#### Send Full Transcripts Array
+Send the full conversation array every time. The server decides based on the last item.
 
 ```json
 {
@@ -128,25 +130,19 @@ ws.onmessage = (event) => {
 }
 ```
 
-**Fields:**
-- `type`: Must be `"transcript"`
-- `transcripts`: Array of transcript objects, each with:
-  - `speaker`: Must be `"patient"` or `"counselor"`
-  - `text`: The spoken text (string)
+Rules:
+- Send the complete `transcripts` array on each update.
+- Each item: `{ "speaker": "patient" | "counselor", "text": "..." }`.
+- If the last item is `patient` → analysis response.
+- If the last item is `counselor` → acknowledged response.
 
-**Important:** Send the **full conversation array** each time. The client maintains the conversation and sends the complete array on every update. The server checks the **last transcript** in the array:
-- If last transcript is `"patient"` → Analyze and return analysis
-- If last transcript is `"counselor"` → Return acknowledgment
-
-#### Ping
+Optional ping:
 
 ```json
-{
-  "type": "ping"
-}
+{ "type": "ping" }
 ```
 
-### Receiving Messages
+### Output (Server → Client)
 
 #### Connection Confirmation
 
@@ -172,7 +168,7 @@ ws.onmessage = (event) => {
 }
 ```
 
-**Note:** Analysis includes previous nudges in context, so new suggestions build upon earlier ones.
+Note: Previous nudges are considered to build on earlier suggestions.
 
 #### Acknowledgment (Counselor Messages)
 
